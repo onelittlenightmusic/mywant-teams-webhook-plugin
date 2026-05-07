@@ -1,0 +1,139 @@
+wantType:
+  metadata:
+    name: teams_notify
+    title: Teams Notified
+    description: |
+      Receives messages from Microsoft Teams Outgoing Webhooks via HTTP POST.
+
+      Creates a webhook endpoint at /api/v1/webhooks/{want-name}.
+      Payloads are stored as a FIFO buffer (last 20) in teams_messages.
+      Supports HMAC-SHA256 signature verification.
+
+      Raw payloads land in teams_latest_message. For structured parsing
+      (sender / text extraction), add a Python Agent Skill to this plugin.
+    version: '2.0'
+    category: system
+    pattern: generator
+
+  goType: webhook_receiver
+
+  parameters:
+  - name: webhook_secret
+    description: |
+      Base64-encoded HMAC-SHA256 secret from Teams Outgoing Webhook config.
+      If empty, signature verification is skipped.
+    type: string
+    default: ""
+    required: false
+    example: "dGVhbXMtc2VjcmV0LWtleQ=="
+
+  - name: channel_filter
+    description: If set, only messages from this Teams channel ID are processed.
+    type: string
+    default: ""
+    required: false
+    example: "19:abc123@thread.tacv2"
+
+  # Internal params consumed by webhook_receiver Go type
+  - name: state_prefix
+    description: Prefix for state keys (teams_messages, teams_message_count, …)
+    type: string
+    default: "teams"
+
+  - name: verify_type
+    description: Signature verification strategy (hmac_sha256 for Teams).
+    type: string
+    default: "hmac_sha256"
+
+  - name: secret_param
+    description: Name of the param that holds the secret value.
+    type: string
+    default: "webhook_secret"
+
+  - name: challenge_field
+    description: JSON field for URL verification challenge (empty = not used).
+    type: string
+    default: ""
+
+  state:
+  - name: teams_webhook_status
+    description: Current status of the webhook (active, stopped)
+    type: string
+    persistent: true
+    initialValue: "active"
+    label: current
+
+  - name: teams_latest_message
+    description: Most recently received Teams payload (raw JSON)
+    type: object
+    persistent: true
+    initialValue: {}
+    label: current
+
+  - name: teams_message_count
+    description: Total number of messages received
+    type: int
+    persistent: true
+    initialValue: 0
+    label: current
+
+  - name: teams_messages
+    description: FIFO buffer of last 20 received payloads
+    type: "[]object"
+    persistent: true
+    initialValue: []
+    label: current
+
+  - name: achieving_percentage
+    description: 50 while active, 100 when stopped
+    type: int
+    persistent: true
+    initialValue: 0
+    label: current
+
+  - name: webhook_url
+    description: Webhook endpoint path for this want
+    type: string
+    persistent: true
+    initialValue: ""
+    label: current
+
+  finalResultField: webhook_url
+
+  connectivity:
+    outputs:
+    - name: teams_messages
+      type: event
+      data_type: webhook_message
+      description: Incoming Teams payloads forwarded to downstream wants
+
+  constraints:
+  - description: Webhook URL is derived from Want Name
+    validation: Want must be deployed before webhook URL is active
+
+  examples:
+  - name: Basic Teams Inbox
+    description: Simple webhook receiver for Teams messages
+    expectedBehavior: |
+      POST /api/v1/webhooks/{want-name}
+      Raw payload stored in teams_latest_message and FIFO buffer teams_messages.
+
+      TEST:
+      curl -X POST http://localhost:8080/api/v1/webhooks/{want-name} \
+        -H "Content-Type: application/json" \
+        -d '{"type":"message","text":"hello","from":{"name":"Test User"},"channelId":"msteams"}'
+    want:
+      metadata:
+        name: teams-inbox
+        type: teams_notify
+      spec:
+        params:
+          webhook_secret: ""
+          channel_filter: ""
+
+  relatedTypes:
+  - slack_notify
+  - reminder
+
+  seeAlso:
+  - Microsoft Teams Outgoing Webhooks documentation
