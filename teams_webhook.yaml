@@ -23,6 +23,8 @@ wantType:
       Base64-encoded HMAC-SHA256 secret from Teams Outgoing Webhook config.
       If empty, signature verification is skipped.
     type: string
+    subType: secret
+    recordMemo: false
     default: ""
     required: false
     example: "dGVhbXMtc2VjcmV0LWtleQ=="
